@@ -15,34 +15,34 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="KabLife.cpp">
+    <ClCompile Include="src\KabLife.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="framework.h">
+    <ClInclude Include="src\framework.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="KabLife.h">
+    <ClInclude Include="src\KabLife.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Resource.h">
+    <ClInclude Include="src\targetver.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="targetver.h">
+    <ClInclude Include="src\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <Image Include="KabLife.ico">
+    <Image Include="resources\KabLife.ico">
       <Filter>Resource Files</Filter>
     </Image>
-    <Image Include="small.ico">
+    <Image Include="resources\small.ico">
       <Filter>Resource Files</Filter>
     </Image>
   </ItemGroup>
   <ItemGroup>
-    <ResourceCompile Include="KabLife.rc">
+    <ResourceCompile Include="resources\KabLife.rc">
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
