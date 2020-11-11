@@ -1,5 +1,6 @@
 // Windows Header Files:
 #include <windows.h>
+#include <windowsx.h>
 
 // C RunTime Header Files:
 #include <stdlib.h>
@@ -37,12 +38,13 @@ inline void SafeRelease(
 #endif //DEBUG || _DEBUG
 #endif
 
-
-
 #ifndef HINST_THISCOMPONENT
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 #define HINST_THISCOMPONENT ((HINSTANCE)&__ImageBase)
 #endif
+
+#define ID_BUTTON_START 0
+#define ID_BUTTON_PAUSE 1
 
 class DemoApp
 {
@@ -85,7 +87,11 @@ private:
         UINT height
     );
 
+    bool HandleControlMessage(DemoApp* pDemoApp, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+        
     static void OnStartButton(DemoApp* pDemoApp);
+
+    static void OnPauseButton(DemoApp* pDemoApp);
 
     static void ProcessProc(void *ptr);
 
@@ -101,10 +107,13 @@ private:
         LPARAM lParam
     );
 
+    bool m_ThreadRunning = false;
+
     HANDLE m_hRunMutex;
     HWND m_hwndParent;
     HWND m_hwndRenderTarget;
     HWND m_hwndStartButton;
+    HWND m_hwndPauseButton;
 
     // Direct2D objects
     ID2D1Factory* m_pDirect2dFactory;
@@ -212,8 +221,22 @@ HRESULT DemoApp::Initialize()
                 75, 
                 25, 
                 m_hwndParent, 
-                NULL, 
+                ID_BUTTON_START, 
                 (HINSTANCE)GetWindowLongPtr(m_hwndParent, GWLP_HINSTANCE), 
+                NULL
+            );
+
+            m_hwndPauseButton = CreateWindow(
+                L"BUTTON",
+                L"Pause",
+                WS_TABSTOP | WS_CHILD | WS_VISIBLE | BS_DEFPUSHBUTTON,
+                (GridWidth * 10) - 170,
+                2,
+                75,
+                25,
+                m_hwndParent,
+                (HMENU)ID_BUTTON_PAUSE,
+                (HINSTANCE)GetWindowLongPtr(m_hwndParent, GWLP_HINSTANCE),
                 NULL
             );
 
@@ -236,6 +259,8 @@ HRESULT DemoApp::Initialize()
             ShowWindow(m_hwndParent, SW_SHOWNORMAL);
             UpdateWindow(m_hwndParent);
             InvalidateRect(m_hwndStartButton, NULL, FALSE);
+            InvalidateRect(m_hwndPauseButton, NULL, FALSE);
+            Button_Enable(m_hwndPauseButton, FALSE);
         }
     }
 
@@ -369,13 +394,14 @@ void DemoApp::ProcessProc(void *ptr)
 {
     DemoApp* pDemoApp = reinterpret_cast<DemoApp*>(ptr);
 
-    BOOL* oldGrid = &pDemoApp->m_cell1[0];
-    BOOL* newGrid = &pDemoApp->m_cell2[0];
+    pDemoApp->m_ThreadRunning = true;
+
+    BOOL* oldGrid = pDemoApp->m_cell;
+    BOOL* newGrid = (oldGrid == pDemoApp->m_cell ? pDemoApp->m_cell2 : pDemoApp->m_cell1 );
     BOOL* tempGrid;
 
     UINT neighbors;
 
-    pDemoApp->m_iterationCount = 0;
     do {
         pDemoApp->m_iterationCount++; 
         if (pDemoApp->m_cell == &pDemoApp->m_cell1[0]) {
@@ -409,12 +435,15 @@ void DemoApp::ProcessProc(void *ptr)
         InvalidateRect(pDemoApp->m_hwndParent, NULL, FALSE);
     }
     while (WaitForSingleObject(pDemoApp->m_hRunMutex, 75L) == WAIT_TIMEOUT);
+    pDemoApp->m_ThreadRunning = false;
 }
 
 void DemoApp::OnStartButton(DemoApp *pDemoApp) {
     pDemoApp->m_cell = pDemoApp->m_cell1;
 
     pDemoApp->m_hRunMutex = CreateMutexW(NULL, TRUE, NULL);
+
+    pDemoApp->m_iterationCount = 0;
 
     for (int x = 0; x < pDemoApp->GridWidth; x++) {
         for (int y = 0; y < pDemoApp->GridHeight; y++) {
@@ -424,6 +453,26 @@ void DemoApp::OnStartButton(DemoApp *pDemoApp) {
     }
 
     _beginthread(DemoApp::ProcessProc, 0, pDemoApp);
+}
+
+void DemoApp::OnPauseButton(DemoApp* pDemoApp) {
+    if (pDemoApp->m_ThreadRunning) 
+    {
+        Button_Enable(pDemoApp->m_hwndStartButton, TRUE);
+        Button_Enable(pDemoApp->m_hwndPauseButton, TRUE);
+        SendMessage(pDemoApp->m_hwndPauseButton, WM_SETTEXT, 0, (LPARAM)L"Resume");
+        ReleaseMutex(pDemoApp->m_hRunMutex);
+    }
+    else
+    {
+        Button_Enable(pDemoApp->m_hwndStartButton, FALSE);
+        Button_Enable(pDemoApp->m_hwndPauseButton, TRUE);
+        SendMessage(pDemoApp->m_hwndPauseButton, WM_SETTEXT, 0, (LPARAM)L"Pause");
+
+        pDemoApp->m_hRunMutex = CreateMutexW(NULL, TRUE, NULL);
+
+        _beginthread(DemoApp::ProcessProc, 0, pDemoApp);
+    }
 }
 
 HRESULT DemoApp::OnRender()
@@ -511,9 +560,35 @@ HRESULT DemoApp::OnRender()
     return hr;
 }
 
+bool DemoApp::HandleControlMessage(DemoApp* pDemoApp, HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam) {
+    bool result = false;
+
+    switch (wParam) {
+    case ID_BUTTON_START:
+        Button_Enable(pDemoApp->m_hwndStartButton, FALSE);
+        Button_Enable(pDemoApp->m_hwndPauseButton, TRUE);
+        SendMessage(pDemoApp->m_hwndPauseButton, WM_SETTEXT, 0, (LPARAM)L"Pause");
+        DemoApp::OnStartButton(pDemoApp);
+        result = true;
+        break;
+    case ID_BUTTON_PAUSE:
+        DemoApp::OnPauseButton(pDemoApp);
+        result = true;
+        break;
+    }
+
+    return result;
+}
+
 LRESULT CALLBACK DemoApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     LRESULT result = 0;
+
+    DemoApp* pDemoApp = reinterpret_cast<DemoApp*>(static_cast<LONG_PTR>(
+        ::GetWindowLongPtrW(
+            hwnd,
+            GWLP_USERDATA
+        )));
 
     if (message == WM_CREATE)
     {
@@ -529,29 +604,17 @@ LRESULT CALLBACK DemoApp::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM
 
         result = 1;
     }
-    else if (message == WM_COMMAND) {
-          DemoApp* pDemoApp = reinterpret_cast<DemoApp*>(static_cast<LONG_PTR>(
-            ::GetWindowLongPtrW(
-                hwnd,
-                GWLP_USERDATA
-            )));
-
-        DemoApp::OnStartButton(pDemoApp);
-    }
     else
     {
-        DemoApp* pDemoApp = reinterpret_cast<DemoApp*>(static_cast<LONG_PTR>(
-            ::GetWindowLongPtrW(
-                hwnd,
-                GWLP_USERDATA
-            )));
-
         bool wasHandled = false;
 
         if (pDemoApp)
         {
             switch (message)
             {
+            case WM_COMMAND:
+                wasHandled = pDemoApp->HandleControlMessage(pDemoApp, hwnd, message, wParam, lParam);
+                break;
             case WM_SIZE:
             {
                 UINT width = LOWORD(lParam);
